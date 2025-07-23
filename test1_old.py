@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import numpy as np
+import base64
 
 st.set_page_config(layout="wide")
 
@@ -37,7 +38,16 @@ st.markdown("""
         color: #666;
     }
     .block-container {
-        padding-top: 0rem;
+        padding-top: 1rem;
+        padding-bottom: 0rem;
+    }
+    .main-header {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background-color: white;
+        padding: 10px 0;
+        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -50,15 +60,43 @@ files_and_teams = [
 ]
 dfs = []
 for file, team in files_and_teams:
-    all_sheets = pd.read_excel(file, sheet_name=None, engine='openpyxl')
-    for df in all_sheets.values():
-        df["Team Name"] = team
-        dfs.append(df)
+    try:
+        all_sheets = pd.read_excel(file, sheet_name=None, engine='openpyxl')
+        
+        for sheet_name, df in all_sheets.items():
+            df["Team Name"] = team
+            
+            # Replace NA, N/A, and similar values with "Not Appeared" across all columns
+            df = df.replace({
+                'NA': 'Not Appeared',
+                'N/A': 'Not Appeared',
+                'N.A': 'Not Appeared',
+                'n/a': 'Not Appeared',
+                'na': 'Not Appeared',
+                'n.a': 'Not Appeared',
+                'N.A.': 'Not Appeared',
+                'N/A/': 'Not Appeared'
+            })
+            dfs.append(df)
+    except Exception as e:
+        st.error(f"Error loading {file}: {str(e)}")
+        
 df_main = pd.concat(dfs, ignore_index=True)
 
 # ---- Merge High School Data Sheet ----
 high_school_df = pd.read_excel("High School Data Sheet.xlsx", engine='openpyxl')
 high_school_df = high_school_df.rename(columns={"Name": "Student"})
+# Also replace NA/N/A values in the high school data sheet
+high_school_df = high_school_df.replace({
+    'NA': 'Not Appeared',
+    'N/A': 'Not Appeared',
+    'N.A': 'Not Appeared',
+    'n/a': 'Not Appeared',
+    'na': 'Not Appeared',
+    'n.a': 'Not Appeared',
+    'N.A.': 'Not Appeared',
+    'N/A/': 'Not Appeared'
+})
 df_main = df_main.merge(high_school_df, how="left", on="Student")
 
 # ---- Clean up duplicate columns after merge ----
@@ -80,19 +118,52 @@ elif "Student" in df_main.columns:
 subject_columns = [
     "Maths", "English", "Kiswahili", "Chemistry", "Biology", "Physics", "CRE", "Geography",
     "History", "Agriculture", "Business Studies", "French", "Computer studies", "Home Science",
-    "Business studies", "Woodwork"
+    "Woodwork"
 ]
 def all_subjects_empty(row):
-    found_na = False
+    # Check if all subjects are either empty/NaN or "Not Appeared"
+    found_data = False
     for col in subject_columns:
         val = row.get(col, np.nan)
-        sval = str(val).strip().upper()
-        if sval in ["N.A", "N/A"]:
-            found_na = True
-        elif pd.notna(val) and sval != "":
-            return False
-    return not found_na
+        if pd.notna(val):
+            sval = str(val).strip()
+            # If value is not empty and not "Not Appeared", we have valid data
+            if sval != "" and sval != "Not Appeared":
+                found_data = True
+                break
+    return not found_data  # Return True if no valid data found (should be dropped)
+
 df_main = df_main[~df_main.apply(all_subjects_empty, axis=1)].reset_index(drop=True)
+
+# ---- Calculate M% (Overall Percentage) from Subject Scores ----
+def calculate_m_percentage(row):
+    """Calculate overall percentage (M%) from subject scores, ignoring empty/NA/Not Appeared values"""
+    valid_scores = []
+    
+    for col in subject_columns:
+        if col in row.index:  # Check if column exists
+            val = row[col]
+            if pd.notna(val):  # Not NaN/None
+                sval = str(val).strip()
+                # Skip empty strings and "Not Appeared"
+                if sval != "" and sval != "Not Appeared":
+                    try:
+                        # Try to convert to numeric
+                        numeric_val = float(sval)
+                        if 0 <= numeric_val <= 100:  # Valid score range
+                            valid_scores.append(numeric_val)
+                    except (ValueError, TypeError):
+                        # Skip non-numeric values
+                        continue
+    
+    # Calculate average if we have valid scores
+    if len(valid_scores) > 0:
+        return round(sum(valid_scores) / len(valid_scores), 2)
+    else:
+        return 0.0  # Return 0 if no valid scores found
+
+# Apply M% calculation to all rows
+df_main["M%"] = df_main.apply(calculate_m_percentage, axis=1)
 
 # ---- Add Remark Column Based on Mean Grade ----
 def grade_to_remark(grade):
@@ -111,11 +182,35 @@ if "Mean Grade" in df_main.columns:
     df_main["Remark"] = df_main["Mean Grade"].apply(grade_to_remark)
 
 # ---- Page Title ----
-st.markdown("""
-    <div style='background-color: #FFC300; padding: 8px; border-radius: 5px; text-align: center; margin-top: 0.2px; margin-bottom: 0.1px;'>
-        <h2 style='color: black; margin: 0; font-size: 1.2em;'>Student Performance Analysis Dashboard</h2>
-    </div>
-""", unsafe_allow_html=True)
+
+# Function to convert image to base64 for embedding
+def get_base64_of_image(path):
+    try:
+        with open(path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except:
+        return None
+
+# Get logo as base64
+logo_base64 = get_base64_of_image("SAM Elimu Logo-white_edited.png")
+
+if logo_base64:
+    st.markdown(f"""
+        <div class="main-header">
+            <div style='background-color: #FFC300; padding: 12px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; display: flex; align-items: center; justify-content: space-between;'>
+                <h1 style='color: black; margin: 0; font-size: 1.8em; font-weight: bold; flex: 1; text-align: center;'>Student Performance Analysis Dashboard</h1>
+                <img src="data:image/png;base64,{logo_base64}" style="height: 120px; width: auto; margin-left: auto; padding-left: 30px;" alt="SAM Elimu Logo">
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+        <div class="main-header">
+            <div style='background-color: #FFC300; padding: 12px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative;'>
+                <h1 style='color: black; margin: 0; font-size: 1.8em; font-weight: bold;'>Student Performance Analysis Dashboard</h1>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
 # ---- Tab Structure ----
 tab1, tab2 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis"])
@@ -142,10 +237,13 @@ with tab1:
 
     # ---- Apply Filters ----
     filtered = df_main.copy()
+    
     if team:
         filtered = filtered[filtered["Team Name"].astype(str).isin(team)]
+    
     if period:
         filtered = filtered[filtered["Period"].astype(str).isin(period)]
+    
     if school:
         filtered = filtered[filtered["School"].astype(str).isin(school)]
     if grade:
@@ -158,11 +256,14 @@ with tab1:
         filtered = filtered[filtered["Home County"].astype(str).isin(county)]
     if "M%" in filtered.columns:
         filtered = filtered[(filtered["M%"] >= marks_range[0]) & (filtered["M%"] <= marks_range[1])]
+    
     filtered = filtered.copy()
 
     # Ensure subject columns are numeric for calculations
     for col in subject_columns:
         if col in filtered.columns:
+            # Replace "Not Appeared" with NaN for numeric calculations
+            filtered[col] = filtered[col].replace("Not Appeared", np.nan)
             filtered[col] = pd.to_numeric(filtered[col], errors='coerce')
 
     with main_col:
@@ -282,7 +383,54 @@ with tab1:
         # ---- Data Table ----
         st.markdown("---")
         st.subheader("📋 Detailed Student Data")
-        st.dataframe(filtered)
+        
+        # Clean up unwanted columns for display
+        columns_to_remove = [
+            'Unnamed: 0_x', 'Unnamed: 18', 'Unnamed: 20', 'Woodwork', 'M %', 'MM/MP', 
+            'Guardian', 'Contact', 'Unnamed: 6', 'Unnamed: 0_y', 'Unnamed: 9', 
+            'Unnamed: 10', 'Unnamed: 11'
+        ]
+        
+        # Create a display dataframe without unwanted columns
+        display_df = filtered.copy()
+        
+        # Remove unwanted columns if they exist
+        existing_unwanted_cols = [col for col in columns_to_remove if col in display_df.columns]
+        if existing_unwanted_cols:
+            display_df = display_df.drop(columns=existing_unwanted_cols)
+        
+        # Remove the first column if it looks like an unnamed index
+        if len(display_df.columns) > 0:
+            first_col = display_df.columns[0]
+            if 'Unnamed' in str(first_col) or first_col == 0:
+                display_df = display_df.drop(columns=[first_col])
+        
+        # Handle duplicate column names more robustly
+        seen_columns = set()
+        columns_to_keep = []
+        columns_to_drop = []
+        
+        for col in display_df.columns:
+            col_lower = str(col).lower().strip()
+            # Check for Business Studies variations
+            if 'business' in col_lower and 'studies' in col_lower:
+                if 'business_studies' not in seen_columns:
+                    seen_columns.add('business_studies')
+                    columns_to_keep.append(col)
+                else:
+                    columns_to_drop.append(col)
+            else:
+                if col_lower not in seen_columns:
+                    seen_columns.add(col_lower)
+                    columns_to_keep.append(col)
+                else:
+                    columns_to_drop.append(col)
+        
+        # Drop duplicate columns
+        if columns_to_drop:
+            display_df = display_df.drop(columns=columns_to_drop)
+        
+        st.dataframe(display_df, use_container_width=True)
 
         # ---- Box Plot for Subjects of Concern ----
         if not concern_subjects.empty:
@@ -362,7 +510,7 @@ with tab2:
                 for subject in subject_columns:
                     if subject in student_data.columns:
                         score = student_data[subject].iloc[0]
-                        if pd.notna(score) and str(score).strip().upper() not in ["N.A", "N/A", ""]:
+                        if pd.notna(score) and str(score).strip() not in ["Not Appeared", ""]:
                             try:
                                 numeric_score = float(score)
                                 subject_scores.append(numeric_score)
@@ -403,12 +551,34 @@ with tab2:
                     if subjects_above_80:
                         st.success(f"**Strong subjects:** {', '.join(subjects_above_80)}")
                 
+                # Show subjects with "Not Appeared" status
+                not_appeared_subjects = []
+                for subject in subject_columns:
+                    if subject in student_data.columns:
+                        score = student_data[subject].iloc[0]
+                        if pd.notna(score) and str(score).strip() == "Not Appeared":
+                            not_appeared_subjects.append(subject)
+                
+                if not_appeared_subjects:
+                    st.info(f"**Subjects not appeared:** {', '.join(not_appeared_subjects)}")
+                    
+                # Show subjects with no data
+                no_data_subjects = []
+                for subject in subject_columns:
+                    if subject in student_data.columns:
+                        score = student_data[subject].iloc[0]
+                        if pd.isna(score) or str(score).strip() == "":
+                            no_data_subjects.append(subject)
+                    else:
+                        no_data_subjects.append(subject)
+                
+                if no_data_subjects:
+                    st.warning(f"**Subjects with no data:** {', '.join(no_data_subjects)}")
+                
                 # Student progress over time (if multiple periods available)
                 st.markdown("#### 📈 Progress Over Time")
                 student_all_periods = df_main[df_main["Student"] == selected_student]
                 
-                # Debug information
-                st.write(f"Total records for {selected_student}: {len(student_all_periods)}")
                 if "Period" in student_all_periods.columns:
                     unique_periods = student_all_periods["Period"].dropna().unique()
                     
@@ -421,7 +591,6 @@ with tab2:
                     
                     # Sort periods numerically
                     sorted_periods = sorted(unique_periods, key=period_to_float)
-                    st.write(f"Available periods (sorted): {sorted_periods}")
                     
                     if len(unique_periods) > 1:
                         # Create progress data for different metrics
@@ -448,21 +617,17 @@ with tab2:
                                 for subject in ["Maths", "English", "Chemistry", "Biology", "Physics"]:
                                     if subject in period_data.columns and pd.notna(latest_record[subject]):
                                         try:
-                                            score = float(latest_record[subject])
-                                            if score > 0 and score <= 100:  # Valid score range
-                                                row_data[subject] = score
+                                            score_val = str(latest_record[subject]).strip()
+                                            if score_val != "Not Appeared" and score_val != "":
+                                                score = float(score_val)
+                                                if score > 0 and score <= 100:  # Valid score range
+                                                    row_data[subject] = score
                                         except:
                                             pass
                                 
                                 # Only add if we have at least one valid metric
                                 if len(row_data) > 1:
                                     progress_data.append(row_data)
-                        
-                        # Debug: Show what data we collected
-                        st.write("Progress data collected:")
-                        if progress_data:
-                            for data_point in progress_data:
-                                st.write(f"Period {data_point['Period']}: {data_point}")
                         
                         if len(progress_data) > 1:
                             progress_df = pd.DataFrame(progress_data)
@@ -555,7 +720,54 @@ with tab2:
                 
                 # Detailed data table for the student
                 st.markdown("#### 📋 Detailed Records")
-                st.dataframe(student_data, use_container_width=True)
+                
+                # Clean up unwanted columns for student data display
+                columns_to_remove = [
+                    'Unnamed: 0_x', 'Unnamed: 18', 'Unnamed: 20', 'Woodwork', 'M %', 'MM/MP', 
+                    'Guardian', 'Contact', 'Unnamed: 6', 'Unnamed: 0_y', 'Unnamed: 9', 
+                    'Unnamed: 10', 'Unnamed: 11'
+                ]
+                
+                # Create a display dataframe without unwanted columns
+                student_display_df = student_data.copy()
+                
+                # Remove unwanted columns if they exist
+                existing_unwanted_cols = [col for col in columns_to_remove if col in student_display_df.columns]
+                if existing_unwanted_cols:
+                    student_display_df = student_display_df.drop(columns=existing_unwanted_cols)
+                
+                # Remove the first column if it looks like an unnamed index
+                if len(student_display_df.columns) > 0:
+                    first_col = student_display_df.columns[0]
+                    if 'Unnamed' in str(first_col) or first_col == 0:
+                        student_display_df = student_display_df.drop(columns=[first_col])
+                
+                # Handle duplicate column names more robustly
+                seen_columns = set()
+                columns_to_keep = []
+                columns_to_drop = []
+                
+                for col in student_display_df.columns:
+                    col_lower = str(col).lower().strip()
+                    # Check for Business Studies variations
+                    if 'business' in col_lower and 'studies' in col_lower:
+                        if 'business_studies' not in seen_columns:
+                            seen_columns.add('business_studies')
+                            columns_to_keep.append(col)
+                        else:
+                            columns_to_drop.append(col)
+                    else:
+                        if col_lower not in seen_columns:
+                            seen_columns.add(col_lower)
+                            columns_to_keep.append(col)
+                        else:
+                            columns_to_drop.append(col)
+                
+                # Drop duplicate columns
+                if columns_to_drop:
+                    student_display_df = student_display_df.drop(columns=columns_to_drop)
+                
+                st.dataframe(student_display_df, use_container_width=True)
             
             else:
                 st.error("No data found for the selected student.")
