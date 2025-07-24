@@ -495,9 +495,10 @@ with tab2:
                         y=subject_scores,
                         title=f"Subject Scores for {selected_student}",
                         labels={"x": "Subject", "y": "Score"},
-                        # color=subject_scores,
+                        color=subject_scores,
                         color_continuous_scale="viridis"
                     )
+                    fig_subjects.update_layout(coloraxis_showscale=False)
                     fig_subjects.add_hline(y=60, line_dash="dash", line_color="red", 
                                          annotation_text="Pass Mark (60%)")
                     st.plotly_chart(fig_subjects, use_container_width=True)
