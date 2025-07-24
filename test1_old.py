@@ -213,7 +213,7 @@ else:
     """, unsafe_allow_html=True)
 
 # ---- Tab Structure ----
-tab1, tab2 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis"])
+tab1, tab2, tab3 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis", "📋 Detailed Data"])
 
 with tab1:
     # ---- Layout: Main Content and Filters Side by Side ----
@@ -233,7 +233,7 @@ with tab1:
         form = st.multiselect("Form", options=sorted([str(x) for x in df_main["Form"].dropna().unique().tolist()])) if "Form" in df_main.columns else []
         donor = st.multiselect("Donor", options=sorted([str(x) for x in df_main["Donor"].dropna().unique().tolist()])) if "Donor" in df_main.columns else []
         county = st.multiselect("Home County", options=sorted([str(x) for x in df_main["Home County"].dropna().unique().tolist()])) if "Home County" in df_main.columns else []
-        marks_range = st.slider("% Marks", 0, 150, (0, 150))
+        marks_range = st.slider("% Marks", 0, 100, (0, 100))
 
     # ---- Apply Filters ----
     filtered = df_main.copy()
@@ -275,7 +275,7 @@ with tab1:
             st.markdown('<div class="metric-header">Number of Students</div>', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-label">Number of Students</div>
+                    <div class="metric-label">Total</div>
                     <div class="metric-value">{filtered.shape[0]}</div>
                 </div>
             """, unsafe_allow_html=True)
@@ -296,7 +296,7 @@ with tab1:
         with main_cols[2]:
             st.markdown('<div class="metric-header">Average Score in Sciences</div>', unsafe_allow_html=True)
             sci_cols = st.columns(3)
-            sci_metrics = [("Chemistry", filtered["Chemistry"].mean()), ("Biology", filtered["Biology"].mean()), ("Maths", filtered["Maths"].mean())]
+            sci_metrics = [("Chem", filtered["Chemistry"].mean()), ("Bio", filtered["Biology"].mean()), ("Math", filtered["Maths"].mean())]
             for i, (label, value) in enumerate(sci_metrics):
                 display_value = f"{value:.0f}" if pd.notnull(value) else "--"
                 with sci_cols[i]:
@@ -333,20 +333,33 @@ with tab1:
             fig1 = px.pie(
                 values=remark_counts.values,
                 names=remark_counts.index,
-                title="Student Remarks",
-                color_discrete_sequence=["#FFA500"]
+                title="Performance Level Distribution",
+                color_discrete_sequence=px.colors.qualitative.Set3
             )
+            fig1.update_traces(hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>')
             chart1.plotly_chart(fig1, use_container_width=True)
 
         if "Mean Grade" in filtered.columns:
             grade_counts = filtered["Mean Grade"].value_counts()
             if len(grade_counts) > 0:
+                # Define grade order for proper sorting
+                grade_order = ["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "E"]
+                # Sort grades according to the defined order
+                ordered_grades = [grade for grade in grade_order if grade in grade_counts.index]
+                ordered_counts = [grade_counts[grade] for grade in ordered_grades]
+                
                 fig2 = px.bar(
-                    x=grade_counts.index.tolist(),
-                    y=grade_counts.values.tolist(),
-                    labels={"x": "Grade", "y": "Count"},
-                    title="Student Count by Grade",
-                    color_discrete_sequence=["#3498db"]
+                    x=ordered_grades,
+                    y=ordered_counts,
+                    labels={"x": "Grade", "y": "Number of Students"},
+                    title="Student Distribution by Grade",
+                    color=ordered_counts,
+                    color_continuous_scale="viridis"
+                )
+                fig2.update_traces(hovertemplate='<b>Grade %{x}</b><br>Students: %{y}<extra></extra>')
+                fig2.update_layout(
+                    xaxis={'categoryorder': 'array', 'categoryarray': ordered_grades},
+                    showlegend=False
                 )
                 chart2.plotly_chart(fig2, use_container_width=True)
             else:
@@ -361,108 +374,65 @@ with tab1:
                 fig3 = px.bar(
                     x=concern_subjects.index,
                     y=concern_subjects.values,
-                    labels={"x": "Subject", "y": "Average Marks"},
-                    title="Subjects of Concern (Avg < 60%)",
-                    color_discrete_sequence=["#FFA500"]
+                    labels={"x": "Subject", "y": "Average Score (%)"},
+                    title="Subjects Needing Attention (Avg < 60%)",
+                    color=concern_subjects.values,
+                    color_continuous_scale="Reds"
                 )
+                fig3.update_traces(hovertemplate='<b>%{x}</b><br>Average: %{y:.1f}%<extra></extra>')
+                fig3.update_layout(showlegend=False, xaxis_tickangle=-45)
                 chart3.plotly_chart(fig3, use_container_width=True)
             else:
                 chart3.info("No subjects of concern (all averages >= 60%).")
 
         if "M%" in filtered.columns and "Student" in filtered.columns:
             top_students = filtered.sort_values(by="M%", ascending=False).head(5)
-            fig4 = px.bar(
-                top_students,
-                x="Student",
-                y="M%",
-                title="Top 5 Students by M%",
-                color_discrete_sequence=["#2ecc71"]
-            )
-            chart4.plotly_chart(fig4, use_container_width=True)
-
-        # ---- Data Table ----
-        st.markdown("---")
-        st.subheader("📋 Detailed Student Data")
-        
-        # Clean up unwanted columns for display
-        columns_to_remove = [
-            'Unnamed: 0_x', 'Unnamed: 18', 'Unnamed: 20', 'Woodwork', 'M %', 'MM/MP', 
-            'Guardian', 'Contact', 'Unnamed: 6', 'Unnamed: 0_y', 'Unnamed: 9', 
-            'Unnamed: 10', 'Unnamed: 11'
-        ]
-        
-        # Create a display dataframe without unwanted columns
-        display_df = filtered.copy()
-        
-        # Remove unwanted columns if they exist
-        existing_unwanted_cols = [col for col in columns_to_remove if col in display_df.columns]
-        if existing_unwanted_cols:
-            display_df = display_df.drop(columns=existing_unwanted_cols)
-        
-        # Remove the first column if it looks like an unnamed index
-        if len(display_df.columns) > 0:
-            first_col = display_df.columns[0]
-            if 'Unnamed' in str(first_col) or first_col == 0:
-                display_df = display_df.drop(columns=[first_col])
-        
-        # Handle duplicate column names more robustly
-        seen_columns = set()
-        columns_to_keep = []
-        columns_to_drop = []
-        
-        for col in display_df.columns:
-            col_lower = str(col).lower().strip()
-            # Check for Business Studies variations
-            if 'business' in col_lower and 'studies' in col_lower:
-                if 'business_studies' not in seen_columns:
-                    seen_columns.add('business_studies')
-                    columns_to_keep.append(col)
-                else:
-                    columns_to_drop.append(col)
-            else:
-                if col_lower not in seen_columns:
-                    seen_columns.add(col_lower)
-                    columns_to_keep.append(col)
-                else:
-                    columns_to_drop.append(col)
-        
-        # Drop duplicate columns
-        if columns_to_drop:
-            display_df = display_df.drop(columns=columns_to_drop)
-        
-        st.dataframe(display_df, use_container_width=True)
+            if not top_students.empty:
+                fig4 = px.bar(
+                    top_students,
+                    x="Student",
+                    y="M%",
+                    title="Top 5 Students by Overall Performance",
+                    color="M%",
+                    color_continuous_scale="Greens"
+                )
+                fig4.update_traces(hovertemplate='<b>%{x}</b><br>Overall Score: %{y:.1f}%<extra></extra>')
+                fig4.update_layout(showlegend=False, xaxis_tickangle=-45)
+                chart4.plotly_chart(fig4, use_container_width=True)
 
         # ---- Box Plot for Subjects of Concern ----
-        if not concern_subjects.empty:
-            fig_box = px.box(
-                filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
-                x="Subject",
-                y="Score",
-                title="Score Distribution for Subjects of Concern",
-                color="Subject"
-            )
-            st.plotly_chart(fig_box, use_container_width=True)
+        if existing_subjects:
+            subject_avg = filtered[existing_subjects].mean().sort_values()
+            concern_subjects = subject_avg[subject_avg < 60]
+            if not concern_subjects.empty:
+                st.markdown("---")
+                st.subheader("📈 Detailed Analysis for Subjects Needing Attention")
+                
+                fig_box = px.box(
+                    filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
+                    x="Subject",
+                    y="Score",
+                    title="Score Distribution for Subjects Needing Attention",
+                    color="Subject",
+                    color_discrete_sequence=px.colors.qualitative.Set2
+                )
+                fig_box.update_traces(hovertemplate='<b>%{x}</b><br>Score: %{y}<extra></extra>')
+                fig_box.update_layout(showlegend=False)
+                st.plotly_chart(fig_box, use_container_width=True)
 
-            fig_violin = px.violin(
-                filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
-                x="Subject",
-                y="Score",
-                box=True,
-                points="all",
-                title="Score Distribution (Violin) for Subjects of Concern",
-                color="Subject"
-            )
-            st.plotly_chart(fig_violin, use_container_width=True)
-
-            heatmap_data = filtered[concern_subjects.index]
-            fig_heatmap = ff.create_annotated_heatmap(
-                z=heatmap_data.values,
-                x=heatmap_data.columns.tolist(),
-                y=filtered["Student"].astype(str).tolist(),
-                colorscale='YlOrRd'
-            )
-            fig_heatmap.update_layout(title="Student Scores Heatmap for Subjects of Concern")
-            st.plotly_chart(fig_heatmap, use_container_width=True)
+                fig_violin = px.violin(
+                    filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
+                    x="Subject",
+                    y="Score",
+                    box=True,
+                    points="all",
+                    title="Score Distribution (Violin Plot) for Subjects Needing Attention",
+                    color="Subject",
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                fig_violin.update_traces(hovertemplate='<b>%{x}</b><br>Score: %{y}<extra></extra>')
+                fig_violin.update_layout(showlegend=False)
+                st.plotly_chart(fig_violin, use_container_width=True)
 
 
 with tab2:
@@ -773,4 +743,97 @@ with tab2:
                 st.error("No data found for the selected student.")
     else:
         st.error("Student data not available.")
+
+
+with tab3:
+    st.markdown("### 📋 Detailed Student Data")
+    
+    # Note about filtering
+    if team or period or school or grade or form or donor or county or marks_range != (0, 100):
+        st.info("📊 Data shown below reflects the current filter settings from the Overall Analysis tab.")
+    
+    # Clean up unwanted columns for display
+    columns_to_remove = [
+        'Unnamed: 0_x', 'Unnamed: 18', 'Unnamed: 20', 'Woodwork', 'M %', 'MM/MP', 
+        'Guardian', 'Contact', 'Unnamed: 6', 'Unnamed: 0_y', 'Unnamed: 9', 
+        'Unnamed: 10', 'Unnamed: 11'
+    ]
+    
+    # Create a display dataframe without unwanted columns
+    display_df = filtered.copy()
+    
+    # Remove unwanted columns if they exist
+    existing_unwanted_cols = [col for col in columns_to_remove if col in display_df.columns]
+    if existing_unwanted_cols:
+        display_df = display_df.drop(columns=existing_unwanted_cols)
+    
+    # Remove the first column if it looks like an unnamed index
+    if len(display_df.columns) > 0:
+        first_col = display_df.columns[0]
+        if 'Unnamed' in str(first_col) or first_col == 0:
+            display_df = display_df.drop(columns=[first_col])
+    
+    # Handle duplicate column names more robustly
+    seen_columns = set()
+    columns_to_keep = []
+    columns_to_drop = []
+    
+    for col in display_df.columns:
+        col_lower = str(col).lower().strip()
+        # Check for Business Studies variations
+        if 'business' in col_lower and 'studies' in col_lower:
+            if 'business_studies' not in seen_columns:
+                seen_columns.add('business_studies')
+                columns_to_keep.append(col)
+            else:
+                columns_to_drop.append(col)
+        else:
+            if col_lower not in seen_columns:
+                seen_columns.add(col_lower)
+                columns_to_keep.append(col)
+            else:
+                columns_to_drop.append(col)
+    
+    # Drop duplicate columns
+    if columns_to_drop:
+        display_df = display_df.drop(columns=columns_to_drop)
+    
+    # Show summary statistics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Records", len(display_df))
+    with col2:
+        if "M%" in display_df.columns:
+            avg_performance = display_df["M%"].mean()
+            st.metric("Average Performance", f"{avg_performance:.1f}%")
+    with col3:
+        if "School" in display_df.columns:
+            unique_schools = display_df["School"].nunique()
+            st.metric("Schools Represented", unique_schools)
+    
+    st.markdown("---")
+    
+    # Add search functionality
+    search_term = st.text_input("🔍 Search in data (student name, school, etc.)", "")
+    if search_term:
+        # Search across text columns
+        text_columns = display_df.select_dtypes(include=['object']).columns
+        mask = False
+        for col in text_columns:
+            mask |= display_df[col].astype(str).str.contains(search_term, case=False, na=False)
+        display_df = display_df[mask]
+        st.info(f"Found {len(display_df)} records matching '{search_term}'")
+    
+    # Display the data
+    st.dataframe(display_df, use_container_width=True, height=600)
+    
+    # Download option
+    if st.button("📥 Download Filtered Data as CSV"):
+        csv = display_df.to_csv(index=False)
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name=f"student_data_filtered_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
 
