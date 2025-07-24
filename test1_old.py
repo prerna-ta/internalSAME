@@ -496,10 +496,9 @@ with tab2:
                         title=f"Subject Scores for {selected_student}",
                         labels={"x": "Subject", "y": "Score"},
                         color=subject_scores,
-                        color_continuous_scale="rainbow"
+                        color_continuous_scale="viridis"
                     )
-                    # fig_subjects.update_layout(coloraxis_showscale=False)
-                    # fig_subjects.update_traces(showscale=False)
+                    
                     fig_subjects.update_traces(hovertemplate='<b>%{x}</b><br>Subject Score: %{y}%<extra></extra>')
                     fig_subjects.add_hline(y=60, line_dash="dash", line_color="red", 
                                          annotation_text="Pass Mark (60%)")
