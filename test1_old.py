@@ -199,7 +199,7 @@ if logo_base64:
         <div class="main-header">
             <div style='background-color: #FFC300; padding: 12px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; display: flex; align-items: center; justify-content: space-between;'>
                 <h1 style='color: black; margin: 0; font-size: 1.8em; font-weight: bold; flex: 1; text-align: center;'>Student Performance Analysis Dashboard</h1>
-                <img src="data:image/png;base64,{logo_base64}" style="height: 120px; width: auto; margin-left: auto; padding-top: 20px; margin-top: auto; padding-left: 20px;" alt="SAM Elimu Logo">
+                <img src="data:image/png;base64,{logo_base64}" style="height: 120px; width: auto; margin-left: auto; margin-top: auto; padding-left: 20px;" alt="SAM Elimu Logo">
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -225,21 +225,82 @@ with tab1:
                 <span style='color: black; font-weight: bold; font-size: 16px;'>🔍 Filter Students</span>
             </div>
         """, unsafe_allow_html=True)
-        team = st.multiselect("Team Name", options=sorted([str(x) for x in df_main["Team Name"].dropna().unique().tolist()]))
-        period_options = sorted([str(x) for x in df_main["Period"].dropna().unique().tolist()])
-        period = st.multiselect("Period (type to search)", options=period_options, max_selections=5, help="Start typing to quickly find a period.")
-        school = st.multiselect("School", options=sorted([str(x) for x in df_main["School"].dropna().unique().tolist()])) if "School" in df_main.columns else []
-        grade = st.multiselect("Mean Grade", options=sorted([str(x) for x in df_main["Mean Grade"].dropna().unique().tolist()])) if "Mean Grade" in df_main.columns else []
-        form = st.multiselect("Form", options=sorted([str(x) for x in df_main["Form"].dropna().unique().tolist()])) if "Form" in df_main.columns else []
-        donor = st.multiselect("Donor", options=sorted([str(x) for x in df_main["Donor"].dropna().unique().tolist()])) if "Donor" in df_main.columns else []
-        county = st.multiselect("Home County", options=sorted([str(x) for x in df_main["Home County"].dropna().unique().tolist()])) if "Home County" in df_main.columns else []
+        
+        # Step 1: Team selection
+        team = st.selectbox("Team Name", options=["All"] + sorted([str(x) for x in df_main["Team Name"].dropna().unique().tolist()]))
+        
+        # Filter data based on team selection for subsequent filters
+        filtered_for_options = df_main.copy()
+        if team and team != "All":
+            filtered_for_options = filtered_for_options[filtered_for_options["Team Name"].astype(str) == team]
+        
+        # Step 2: Form selection (based on available forms for selected team)
+        if "Form" in filtered_for_options.columns:
+            available_forms = sorted([str(x) for x in filtered_for_options["Form"].dropna().unique().tolist()])
+            form = st.multiselect("Form", options=available_forms)
+            
+            # Further filter for subsequent options
+            if form:
+                filtered_for_options = filtered_for_options[filtered_for_options["Form"].astype(str).isin(form)]
+        else:
+            form = []
+        
+        # Step 3: Period selection (based on available periods for selected team/form)
+        available_periods = sorted([str(x) for x in filtered_for_options["Period"].dropna().unique().tolist()])
+        period = st.multiselect("Period (type to search)", options=available_periods, max_selections=5, help="Start typing to quickly find a period.")
+        
+        # Further filter for subsequent options
+        if period:
+            filtered_for_options = filtered_for_options[filtered_for_options["Period"].astype(str).isin(period)]
+        
+        # Step 4: School selection (based on available schools for current selection)
+        if "School" in filtered_for_options.columns:
+            available_schools = sorted([str(x) for x in filtered_for_options["School"].dropna().unique().tolist()])
+            school = st.multiselect("School", options=available_schools)
+            
+            if school:
+                filtered_for_options = filtered_for_options[filtered_for_options["School"].astype(str).isin(school)]
+        else:
+            school = []
+        
+        # Step 5: Mean Grade selection (based on available grades for current selection)
+        if "Mean Grade" in filtered_for_options.columns:
+            available_grades = sorted([str(x) for x in filtered_for_options["Mean Grade"].dropna().unique().tolist()])
+            grade = st.multiselect("Mean Grade", options=available_grades)
+            
+            if grade:
+                filtered_for_options = filtered_for_options[filtered_for_options["Mean Grade"].astype(str).isin(grade)]
+        else:
+            grade = []
+        
+        # Step 6: Donor selection (based on available donors for current selection)
+        if "Donor" in filtered_for_options.columns:
+            available_donors = sorted([str(x) for x in filtered_for_options["Donor"].dropna().unique().tolist()])
+            donor = st.multiselect("Donor", options=available_donors)
+            
+            if donor:
+                filtered_for_options = filtered_for_options[filtered_for_options["Donor"].astype(str).isin(donor)]
+        else:
+            donor = []
+        
+        # Step 7: Home County selection (based on available counties for current selection)
+        if "Home County" in filtered_for_options.columns:
+            available_counties = sorted([str(x) for x in filtered_for_options["Home County"].dropna().unique().tolist()])
+            county = st.multiselect("Home County", options=available_counties)
+        else:
+            county = []
+        
+        # Step 8: Marks range slider
         marks_range = st.slider("% Marks", 0, 100, (0, 100))
 
     # ---- Apply Filters ----
     filtered = df_main.copy()
     
-    if team:
-        filtered = filtered[filtered["Team Name"].astype(str).isin(team)]
+    if team and team != "All":
+        filtered = filtered[filtered["Team Name"].astype(str) == team]
+    
+    if form:
+        filtered = filtered[filtered["Form"].astype(str).isin(form)]
     
     if period:
         filtered = filtered[filtered["Period"].astype(str).isin(period)]
@@ -248,8 +309,6 @@ with tab1:
         filtered = filtered[filtered["School"].astype(str).isin(school)]
     if grade:
         filtered = filtered[filtered["Mean Grade"].astype(str).isin(grade)]
-    if form:
-        filtered = filtered[filtered["Form"].astype(str).isin(form)]
     if donor:
         filtered = filtered[filtered["Donor"].astype(str).isin(donor)]
     if county:
@@ -269,9 +328,11 @@ with tab1:
     with main_col:
         # ---- Summary Metrics ----
         st.markdown("---")
-        main_cols = st.columns(4)
+        
+        # First row: Number of Students, Sciences, Languages
+        main_cols_row1 = st.columns(3)
 
-        with main_cols[0]:
+        with main_cols_row1[0]:
             st.markdown('<div class="metric-header">Number of Students</div>', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="metric-card">
@@ -280,49 +341,92 @@ with tab1:
                 </div>
             """, unsafe_allow_html=True)
 
-        with main_cols[1]:
-            st.markdown('<div class="metric-header">Average Score in Languages</div>', unsafe_allow_html=True)
-            lang_cols = st.columns(2)
-            for i, (label, value) in enumerate([("English", filtered["English"].mean()), ("Kiswahili", filtered["Kiswahili"].mean())]):
-                display_value = f"{value:.0f}" if pd.notnull(value) else "--"
-                with lang_cols[i]:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-label">{label}</div>
-                            <div class="metric-value">{display_value}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-        with main_cols[2]:
+        with main_cols_row1[1]:
             st.markdown('<div class="metric-header">Average Score in Sciences</div>', unsafe_allow_html=True)
-            sci_cols = st.columns(3)
-            sci_metrics = [("Chem", filtered["Chemistry"].mean()), ("Bio", filtered["Biology"].mean()), ("Math", filtered["Maths"].mean())]
-            for i, (label, value) in enumerate(sci_metrics):
-                display_value = f"{value:.0f}" if pd.notnull(value) else "--"
-                with sci_cols[i]:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-label">{label}</div>
-                            <div class="metric-value">{display_value}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+            # Sciences: Mathematics, Biology, Chemistry, Physics
+            science_subjects = ["Maths", "Biology", "Chemistry", "Physics"]
+            science_metrics = []
+            for subject in science_subjects:
+                if subject in filtered.columns:
+                    science_metrics.append((subject, filtered[subject].mean()))
+            
+            if science_metrics:
+                sci_cols = st.columns(len(science_metrics))
+                for i, (label, value) in enumerate(science_metrics):
+                    display_value = f"{value:.0f}" if pd.notnull(value) else "--"
+                    with sci_cols[i]:
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">{label}</div>
+                                <div class="metric-value">{display_value}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
-        with main_cols[3]:
+        with main_cols_row1[2]:
+            st.markdown('<div class="metric-header">Average Score in Languages</div>', unsafe_allow_html=True)
+            # Languages: English, Kiswahili, French
+            language_subjects = ["English", "Kiswahili", "French"]
+            language_metrics = []
+            for subject in language_subjects:
+                if subject in filtered.columns:
+                    language_metrics.append((subject, filtered[subject].mean()))
+            
+            if language_metrics:
+                lang_cols = st.columns(len(language_metrics))
+                for i, (label, value) in enumerate(language_metrics):
+                    display_value = f"{value:.0f}" if pd.notnull(value) else "--"
+                    with lang_cols[i]:
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">{label}</div>
+                                <div class="metric-value">{display_value}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+        # Second row: Humanities and Technical Subjects
+        main_cols_row2 = st.columns(2)
+
+        with main_cols_row2[0]:
             st.markdown('<div class="metric-header">Average Score in Humanities</div>', unsafe_allow_html=True)
-            hum_metrics = []
-            if "CS" in filtered.columns:
-                hum_metrics.append(("CS", filtered["CS"].mean()))
-            hum_metrics += [("Geography", filtered["Geography"].mean()), ("Agriculture", filtered["Agriculture"].mean())]
-            hum_cols = st.columns(len(hum_metrics))
-            for i, (label, value) in enumerate(hum_metrics):
-                display_value = f"{value:.0f}" if pd.notnull(value) else "--"
-                with hum_cols[i]:
-                    st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-label">{label}</div>
-                            <div class="metric-value">{display_value}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+            # Humanities: History, Geography, CRE
+            humanities_subjects = ["History", "Geography", "CRE"]
+            humanities_metrics = []
+            for subject in humanities_subjects:
+                if subject in filtered.columns:
+                    humanities_metrics.append((subject, filtered[subject].mean()))
+            
+            if humanities_metrics:
+                hum_cols = st.columns(len(humanities_metrics))
+                for i, (label, value) in enumerate(humanities_metrics):
+                    display_value = f"{value:.0f}" if pd.notnull(value) else "--"
+                    with hum_cols[i]:
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">{label}</div>
+                                <div class="metric-value">{display_value}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+        with main_cols_row2[1]:
+            st.markdown('<div class="metric-header">Average Score in Technical Subjects</div>', unsafe_allow_html=True)
+            # Technical Subjects: Computer Studies, Business Studies, Electricity, Woodwork, Home Science, Agriculture
+            technical_subjects = ["Computer studies", "Business Studies", "Woodwork", "Home Science", "Agriculture"]
+            technical_metrics = []
+            for subject in technical_subjects:
+                if subject in filtered.columns:
+                    technical_metrics.append((subject, filtered[subject].mean()))
+            
+            if technical_metrics:
+                tech_cols = st.columns(len(technical_metrics))
+                for i, (label, value) in enumerate(technical_metrics):
+                    display_value = f"{value:.0f}" if pd.notnull(value) else "--"
+                    with tech_cols[i]:
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">{label}</div>
+                                <div class="metric-value">{display_value}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
         # ---- Charts ----
         st.markdown("---")
@@ -440,7 +544,20 @@ with tab2:
     
     # Student selector
     if "Student" in df_main.columns:
-        student_list = sorted([str(x) for x in df_main["Student"].dropna().unique().tolist()])
+        # Filter out non-student entries like "Category Distribution" and other system entries
+        student_list = []
+        for student in df_main["Student"].dropna().unique():
+            student_str = str(student).strip()
+            # Skip entries that look like headers, categories, or system entries
+            if (student_str and 
+                student_str not in ["Category Distribution", "CATEGORY DISTRIBUTION", "category distribution"] and
+                not student_str.lower().startswith("category") and
+                not student_str.lower().startswith("total") and
+                not student_str.lower().startswith("average") and
+                len(student_str) > 2):  # Ensure it's a meaningful name
+                student_list.append(student_str)
+        
+        student_list = sorted(student_list)
         selected_student = st.selectbox("Select a Student", options=student_list)
         
         if selected_student:
@@ -585,8 +702,8 @@ with tab2:
                                     except:
                                         pass
                                 
-                                # Add individual subject scores
-                                for subject in ["Maths", "English", "Chemistry", "Biology", "Physics"]:
+                                # Add individual subject scores for all available subjects
+                                for subject in subject_columns:
                                     if subject in period_data.columns and pd.notna(latest_record[subject]):
                                         try:
                                             score_val = str(latest_record[subject]).strip()
@@ -620,6 +737,7 @@ with tab2:
                                     fig_overall.update_layout(
                                         xaxis_title="Period",
                                         yaxis_title="Overall Percentage (%)",
+                                        xaxis=dict(type='category'),  # Treat x-axis as categorical to show actual period values
                                         showlegend=True
                                     )
                                     st.plotly_chart(fig_overall, use_container_width=True)
@@ -676,6 +794,7 @@ with tab2:
                                         fig_subjects.update_layout(
                                             xaxis_title="Period",
                                             yaxis_title="Score (%)",
+                                            xaxis=dict(type='category'),  # Treat x-axis as categorical to show actual period values
                                             showlegend=True
                                         )
                                         st.plotly_chart(fig_subjects, use_container_width=True)
@@ -751,7 +870,7 @@ with tab3:
     st.markdown("### 📋 Detailed Student Data")
     
     # Note about filtering
-    if team or period or school or grade or form or donor or county or marks_range != (0, 100):
+    if (team and team != "All") or form or period or school or grade or donor or county or marks_range != (0, 100):
         st.info("📊 Data shown below reflects the current filter settings from the Overall Analysis tab.")
     
     # Clean up unwanted columns for display
