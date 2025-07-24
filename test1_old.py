@@ -400,39 +400,39 @@ with tab1:
                 fig4.update_layout(showlegend=False, xaxis_tickangle=-45)
                 chart4.plotly_chart(fig4, use_container_width=True)
 
-        # ---- Box Plot for Subjects of Concern ----
-        if existing_subjects:
-            subject_avg = filtered[existing_subjects].mean().sort_values()
-            concern_subjects = subject_avg[subject_avg < 60]
-            if not concern_subjects.empty:
-                st.markdown("---")
-                st.subheader("📈 Detailed Analysis for Subjects Needing Attention")
+        # # ---- Box Plot for Subjects of Concern ----
+        # if existing_subjects:
+        #     subject_avg = filtered[existing_subjects].mean().sort_values()
+        #     concern_subjects = subject_avg[subject_avg < 60]
+        #     if not concern_subjects.empty:
+        #         st.markdown("---")
+        #         st.subheader("📈 Detailed Analysis for Subjects Needing Attention")
                 
-                fig_box = px.box(
-                    filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
-                    x="Subject",
-                    y="Score",
-                    title="Score Distribution for Subjects Needing Attention",
-                    color="Subject",
-                    color_discrete_sequence=px.colors.qualitative.Set2
-                )
-                fig_box.update_traces(hovertemplate='<b>%{x}</b><br>Score: %{y}<extra></extra>')
-                fig_box.update_layout(showlegend=False)
-                st.plotly_chart(fig_box, use_container_width=True)
+        #         fig_box = px.box(
+        #             filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
+        #             x="Subject",
+        #             y="Score",
+        #             title="Score Distribution for Subjects Needing Attention",
+        #             color="Subject",
+        #             color_discrete_sequence=px.colors.qualitative.Set2
+        #         )
+        #         fig_box.update_traces(hovertemplate='<b>%{x}</b><br>Score: %{y}<extra></extra>')
+        #         fig_box.update_layout(showlegend=False)
+        #         st.plotly_chart(fig_box, use_container_width=True)
 
-                fig_violin = px.violin(
-                    filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
-                    x="Subject",
-                    y="Score",
-                    box=True,
-                    points="all",
-                    title="Score Distribution (Violin Plot) for Subjects Needing Attention",
-                    color="Subject",
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                fig_violin.update_traces(hovertemplate='<b>%{x}</b><br>Score: %{y}<extra></extra>')
-                fig_violin.update_layout(showlegend=False)
-                st.plotly_chart(fig_violin, use_container_width=True)
+        #         fig_violin = px.violin(
+        #             filtered.melt(value_vars=concern_subjects.index, var_name="Subject", value_name="Score"),
+        #             x="Subject",
+        #             y="Score",
+        #             box=True,
+        #             points="all",
+        #             title="Score Distribution (Violin Plot) for Subjects Needing Attention",
+        #             color="Subject",
+        #             color_discrete_sequence=px.colors.qualitative.Pastel
+        #         )
+        #         fig_violin.update_traces(hovertemplate='<b>%{x}</b><br>Score: %{y}<extra></extra>')
+        #         fig_violin.update_layout(showlegend=False)
+        #         st.plotly_chart(fig_violin, use_container_width=True)
 
 
 with tab2:
@@ -496,7 +496,7 @@ with tab2:
                         title=f"Subject Scores for {selected_student}",
                         labels={"x": "Subject", "y": "Score"},
                         # color=subject_scores,
-                        # color_continuous_scale="viridis"
+                        color_continuous_scale="viridis"
                     )
                     fig_subjects.add_hline(y=60, line_dash="dash", line_color="red", 
                                          annotation_text="Pass Mark (60%)")
