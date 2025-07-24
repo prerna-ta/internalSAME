@@ -199,7 +199,7 @@ if logo_base64:
         <div class="main-header">
             <div style='background-color: #FFC300; padding: 12px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; display: flex; align-items: center; justify-content: space-between;'>
                 <h1 style='color: black; margin: 0; font-size: 1.8em; font-weight: bold; flex: 1; text-align: center;'>Student Performance Analysis Dashboard</h1>
-                <img src="data:image/png;base64,{logo_base64}" style="height: 120px; width: auto; margin-left: auto;  margin-top: auto; padding-left: 20px;" alt="SAM Elimu Logo">
+                <img src="data:image/png;base64,{logo_base64}" style="height: 120px; width: auto; margin-left: auto; padding-top: 20px; margin-top: auto; padding-left: 20px;" alt="SAM Elimu Logo">
             </div>
         </div>
     """, unsafe_allow_html=True)
