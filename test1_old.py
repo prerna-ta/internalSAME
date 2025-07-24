@@ -499,7 +499,7 @@ with tab2:
                         color_continuous_scale="viridis"
                     )
                     
-                    fig_subjects.update_traces(hovertemplate='<b>%{x}</b><br>Subject Score: %{y}%<extra></extra>')
+                    fig_subjects.update_traces(hovertemplate='<b>%{x}</b><br>Subject Score: %{y}<extra></extra>')
                     fig_subjects.add_hline(y=60, line_dash="dash", line_color="red", 
                                          annotation_text="Pass Mark (60%)")
                     st.plotly_chart(fig_subjects, use_container_width=True)
