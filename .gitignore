@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+env/
+venv/
+.DS_Store
+*.xlsx
+*.png
+test1_old.py
+debug_data.py
+check_kathy.py
