@@ -311,7 +311,8 @@ else:
     """, unsafe_allow_html=True)
 
 # ---- Tab Structure ----
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis", "📋 Detailed Data", "🚪 Dropouts"])
+tab1, tab2, tab3 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis", "📋 Detailed Data"])
+# tab1, tab2, tab3, tab4 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis", "📋 Detailed Data", "🚪 Dropouts"])
 
 with tab1:
     # ---- Layout: Main Content and Filters Side by Side ----
@@ -717,40 +718,40 @@ with tab2:
                     st.info(f"**Subjects not appeared:** {', '.join(not_appeared_subjects)}")
 
 # ---- Dropouts Tab ----
-with tab4:
-    st.markdown("### 🚪 Dropouts Tracking")
-    dropout_file = "dropouts.csv"
-    dropouts_df = None
-    if os.path.exists(dropout_file):
-        try:
-            dropouts_df = pd.read_csv(dropout_file)
-        except Exception as e:
-            st.error(f"Error reading {dropout_file}: {str(e)}")
-    if dropouts_df is not None and not dropouts_df.empty:
-        st.dataframe(dropouts_df, use_container_width=True)
-        csv_data = dropouts_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Dropouts Data as CSV",
-            data=csv_data,
-            file_name=f"dropouts_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
-    else:
-        st.info("No dropout data found. Please add a 'dropouts.csv' file with columns: Student, Dropout Date, Reason.")
-        # Show template/example
-        template = pd.DataFrame({
-            "Student": ["John Doe", "Jane Smith"],
-            "Dropout Date": ["2025-03-15", "2025-05-10"],
-            "Reason": ["Financial hardship", "Relocation"]
-        })
-        st.dataframe(template, use_container_width=True)
-        template_csv = template.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Dropouts Template CSV",
-            data=template_csv,
-            file_name="dropouts_template.csv",
-            mime="text/csv"
-        )
+# with tab4:
+#     st.markdown("### 🚪 Dropouts Tracking")
+#     dropout_file = "dropouts.csv"
+#     dropouts_df = None
+#     if os.path.exists(dropout_file):
+#         try:
+#             dropouts_df = pd.read_csv(dropout_file)
+#         except Exception as e:
+#             st.error(f"Error reading {dropout_file}: {str(e)}")
+#     if dropouts_df is not None and not dropouts_df.empty:
+#         st.dataframe(dropouts_df, use_container_width=True)
+#         csv_data = dropouts_df.to_csv(index=False)
+#         st.download_button(
+#             label="📥 Download Dropouts Data as CSV",
+#             data=csv_data,
+#             file_name=f"dropouts_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+#             mime="text/csv"
+#         )
+#     else:
+#         st.info("No dropout data found. Please add a 'dropouts.csv' file with columns: Student, Dropout Date, Reason.")
+#         # Show template/example
+#         template = pd.DataFrame({
+#             "Student": ["John Doe", "Jane Smith"],
+#             "Dropout Date": ["2025-03-15", "2025-05-10"],
+#             "Reason": ["Financial hardship", "Relocation"]
+#         })
+#         st.dataframe(template, use_container_width=True)
+#         template_csv = template.to_csv(index=False)
+#         st.download_button(
+#             label="📥 Download Dropouts Template CSV",
+#             data=template_csv,
+#             file_name="dropouts_template.csv",
+#             mime="text/csv"
+#         )
 
 with tab3:
     st.markdown("### 📋 Detailed Student Data")
