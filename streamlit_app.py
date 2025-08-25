@@ -160,7 +160,7 @@ def load_data():
         
         # Load High School Data Sheet (only if file ID is provided and not placeholder)
         high_school_file_id = file_ids.get("high_school_data", "")
-        if high_school_file_id and high_school_file_id != "REPLACE_WITH_ACTUAL_FILE_ID":
+        if high_school_file_id:
             high_school_data = load_excel_from_drive(service, high_school_file_id, "High School Data")
             if high_school_data:
                 # Get the first sheet if multiple sheets exist
@@ -311,7 +311,7 @@ else:
     """, unsafe_allow_html=True)
 
 # ---- Tab Structure ----
-tab1, tab2, tab3 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis", "📋 Detailed Data"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Overall Analysis", "👨‍🎓 Student Analysis", "📋 Detailed Data", "🚪 Dropouts"])
 
 with tab1:
     # ---- Layout: Main Content and Filters Side by Side ----
@@ -432,10 +432,10 @@ with tab1:
 
         with main_cols_row1[0]:
             st.markdown('<div class="metric-header">Number of Students</div>', unsafe_allow_html=True)
+            unique_students = filtered["Student"].nunique() if "Student" in filtered.columns else 0
             st.markdown(f"""
                 <div class="metric-card">
-                    <div class="metric-label">Total</div>
-                    <div class="metric-value">{filtered.shape[0]}</div>
+                    <div class="metric-value">{unique_students}</div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -573,13 +573,13 @@ with tab1:
         existing_subjects = [sub for sub in subject_columns if sub in filtered.columns]
         if existing_subjects:
             subject_avg = filtered[existing_subjects].mean().sort_values()
-            concern_subjects = subject_avg[subject_avg < 60]
+            concern_subjects = subject_avg[subject_avg < 55]
             if not concern_subjects.empty:
                 fig3 = px.bar(
                     x=concern_subjects.index,
                     y=concern_subjects.values,
                     labels={"x": "Subject", "y": "Average Score (%)"},
-                    title="Subjects Needing Attention (Avg < 60%)",
+                    title="Subjects Needing Attention (Avg < 55%)",
                     color=concern_subjects.values,
                     color_continuous_scale="Reds"
                 )
@@ -587,22 +587,23 @@ with tab1:
                 fig3.update_layout(showlegend=False, xaxis_tickangle=-45)
                 chart3.plotly_chart(fig3, use_container_width=True)
             else:
-                chart3.info("No subjects of concern (all averages >= 60%).")
+                chart3.info("No subjects of concern (all averages >= 55%).")
 
         if "M%" in filtered.columns and "Student" in filtered.columns:
-            top_students = filtered.sort_values(by="M%", ascending=False).head(5)
-            if not top_students.empty:
-                fig4 = px.bar(
-                    top_students,
-                    x="Student",
-                    y="M%",
-                    title="Top 5 Students by Overall Performance",
-                    color="M%",
-                    color_continuous_scale="Greens"
-                )
-                fig4.update_traces(hovertemplate='<b>%{x}</b><br>Overall Score: %{y:.1f}%<extra></extra>')
-                fig4.update_layout(showlegend=False, xaxis_tickangle=-45)
-                chart4.plotly_chart(fig4, use_container_width=True)
+            # Show overall performance distribution instead of top 5
+            fig4 = px.histogram(
+                filtered,
+                x="M%",
+                nbins=20,
+                title="Overall Performance Distribution",
+                color_discrete_sequence=["#2ca02c"]
+            )
+            fig4.update_layout(
+                xaxis_title="Overall Percentage (%)",
+                yaxis_title="Number of Students",
+                showlegend=False
+            )
+            chart4.plotly_chart(fig4, use_container_width=True)
 
 with tab2:
     st.markdown("### 👨‍🎓 Individual Student Analysis")
@@ -705,230 +706,51 @@ with tab2:
                     if subjects_above_80:
                         st.success(f"**Strong subjects:** {', '.join(subjects_above_80)}")
                 
-                # Show subjects with "Not Appeared" status
+                # Show subjects with "Not Appeared" status only
                 not_appeared_subjects = []
                 for subject in subject_columns:
                     if subject in student_data.columns:
                         score = student_data[subject].iloc[0]
                         if pd.notna(score) and str(score).strip() == "Not Appeared":
                             not_appeared_subjects.append(subject)
-                
                 if not_appeared_subjects:
                     st.info(f"**Subjects not appeared:** {', '.join(not_appeared_subjects)}")
-                    
-                # Show subjects with no data
-                no_data_subjects = []
-                for subject in subject_columns:
-                    if subject in student_data.columns:
-                        score = student_data[subject].iloc[0]
-                        if pd.isna(score) or str(score).strip() == "":
-                            no_data_subjects.append(subject)
-                    else:
-                        no_data_subjects.append(subject)
-                
-                if no_data_subjects:
-                    st.warning(f"**Subjects with no data:** {', '.join(no_data_subjects)}")
-                
-                # Student progress over time (if multiple periods available)
-                st.markdown("#### 📈 Progress Over Time")
-                student_all_periods = df_main[df_main["Student"] == selected_student]
-                
-                if "Period" in student_all_periods.columns:
-                    unique_periods = student_all_periods["Period"].dropna().unique()
-                    
-                    # Convert periods to numeric for proper sorting (e.g., "2.1" -> 2.1)
-                    def period_to_float(period_str):
-                        try:
-                            return float(str(period_str).strip())
-                        except:
-                            return 0.0
-                    
-                    # Sort periods numerically
-                    sorted_periods = sorted(unique_periods, key=period_to_float)
-                    
-                    if len(unique_periods) > 1:
-                        # Create progress data for different metrics
-                        progress_data = []
-                        
-                        for period in sorted_periods:
-                            period_data = student_all_periods[student_all_periods["Period"] == period]
-                            if not period_data.empty:
-                                # Get the most recent record for this period (in case of duplicates)
-                                latest_record = period_data.iloc[-1]
-                                
-                                row_data = {"Period": str(period)}
-                                
-                                # Add M% if available and valid
-                                if "M%" in period_data.columns and pd.notna(latest_record["M%"]):
-                                    try:
-                                        m_percent = float(latest_record["M%"])
-                                        if m_percent > 0 and m_percent <= 100:  # Valid percentage range
-                                            row_data["Overall %"] = m_percent
-                                    except:
-                                        pass
-                                
-                                # Add individual subject scores for all available subjects
-                                for subject in subject_columns:
-                                    if subject in period_data.columns and pd.notna(latest_record[subject]):
-                                        try:
-                                            score_val = str(latest_record[subject]).strip()
-                                            if score_val != "Not Appeared" and score_val != "":
-                                                score = float(score_val)
-                                                if score > 0 and score <= 100:  # Valid score range
-                                                    row_data[subject] = score
-                                        except:
-                                            pass
-                                
-                                # Only add if we have at least one valid metric
-                                if len(row_data) > 1:
-                                    progress_data.append(row_data)
-                        
-                        if len(progress_data) > 1:
-                            progress_df = pd.DataFrame(progress_data)
-                            
-                            # Plot overall percentage trend if available
-                            if "Overall %" in progress_df.columns and progress_df["Overall %"].notna().sum() > 1:
-                                # Filter out any NaN values
-                                overall_df = progress_df.dropna(subset=["Overall %"])
-                                if len(overall_df) > 1:
-                                    fig_overall = px.line(
-                                        overall_df,
-                                        x="Period",
-                                        y="Overall %",
-                                        title=f"Overall Performance Trend for {selected_student}",
-                                        markers=True,
-                                        line_shape="linear"
-                                    )
-                                    fig_overall.update_layout(
-                                        xaxis_title="Period",
-                                        yaxis_title="Overall Percentage (%)",
-                                        xaxis=dict(type='category'),  # Treat x-axis as categorical to show actual period values
-                                        showlegend=True
-                                    )
-                                    st.plotly_chart(fig_overall, use_container_width=True)
-                                    
-                                    # Show progress summary with valid data
-                                    first_score = overall_df["Overall %"].iloc[0]
-                                    last_score = overall_df["Overall %"].iloc[-1]
-                                    change = last_score - first_score
-                                    
-                                    col1, col2, col3 = st.columns(3)
-                                    with col1:
-                                        st.metric("First Period", f"{first_score:.1f}%")
-                                    with col2:
-                                        st.metric("Latest Period", f"{last_score:.1f}%")
-                                    with col3:
-                                        st.metric("Change", f"{change:+.1f}%", delta=f"{change:+.1f}%")
-                                else:
-                                    st.info("Overall percentage data available but insufficient valid data points for trend.")
-                            else:
-                                st.info("Overall percentage data not available or insufficient for trend analysis.")
-                            
-                            # Plot subject-wise trends if available
-                            subject_cols = [col for col in progress_df.columns if col not in ["Period", "Overall %"]]
-                            if subject_cols:
-                                # Create a melted dataframe, but handle NaN values properly
-                                melted_data = []
-                                for _, row in progress_df.iterrows():
-                                    for subject in subject_cols:
-                                        if pd.notna(row[subject]):
-                                            melted_data.append({
-                                                "Period": row["Period"],
-                                                "Subject": subject,
-                                                "Score": row[subject]
-                                            })
-                                
-                                if melted_data:
-                                    melted_df = pd.DataFrame(melted_data)
-                                    
-                                    # Only plot subjects that have at least 2 data points
-                                    subject_counts = melted_df.groupby("Subject").size()
-                                    valid_subjects = subject_counts[subject_counts >= 2].index.tolist()
-                                    
-                                    if valid_subjects:
-                                        filtered_melted = melted_df[melted_df["Subject"].isin(valid_subjects)]
-                                        
-                                        fig_subjects = px.line(
-                                            filtered_melted,
-                                            x="Period",
-                                            y="Score",
-                                            color="Subject",
-                                            title=f"Subject-wise Performance Trend for {selected_student}",
-                                            markers=True
-                                        )
-                                        fig_subjects.update_layout(
-                                            xaxis_title="Period",
-                                            yaxis_title="Score (%)",
-                                            xaxis=dict(type='category'),  # Treat x-axis as categorical to show actual period values
-                                            showlegend=True
-                                        )
-                                        st.plotly_chart(fig_subjects, use_container_width=True)
-                                    else:
-                                        st.info("Insufficient subject data points for trend analysis.")
-                                else:
-                                    st.info("No valid subject scores found for trend analysis.")
-                        else:
-                            st.info("Not enough valid data points to show progress trend.")
-                    else:
-                        st.info("Only one period of data available for this student.")
-                else:
-                    st.info("Period information not available in the data.")
-                
-                # Detailed data table for the student
-                st.markdown("#### 📋 Detailed Records")
-                
-                # Clean up unwanted columns for student data display
-                columns_to_remove = [
-                    'Unnamed: 0_x', 'Unnamed: 18', 'Unnamed: 20', 'Woodwork', 'M %', 'MM/MP', 
-                    'Guardian', 'Contact', 'Unnamed: 6', 'Unnamed: 0_y', 'Unnamed: 9', 
-                    'Unnamed: 10', 'Unnamed: 11'
-                ]
-                
-                # Create a display dataframe without unwanted columns
-                student_display_df = student_data.copy()
-                
-                # Remove unwanted columns if they exist
-                existing_unwanted_cols = [col for col in columns_to_remove if col in student_display_df.columns]
-                if existing_unwanted_cols:
-                    student_display_df = student_display_df.drop(columns=existing_unwanted_cols)
-                
-                # Remove the first column if it looks like an unnamed index
-                if len(student_display_df.columns) > 0:
-                    first_col = student_display_df.columns[0]
-                    if 'Unnamed' in str(first_col) or first_col == 0:
-                        student_display_df = student_display_df.drop(columns=[first_col])
-                
-                # Handle duplicate column names more robustly
-                seen_columns = set()
-                columns_to_keep = []
-                columns_to_drop = []
-                
-                for col in student_display_df.columns:
-                    col_lower = str(col).lower().strip()
-                    # Check for Business Studies variations
-                    if 'business' in col_lower and 'studies' in col_lower:
-                        if 'business_studies' not in seen_columns:
-                            seen_columns.add('business_studies')
-                            columns_to_keep.append(col)
-                        else:
-                            columns_to_drop.append(col)
-                    else:
-                        if col_lower not in seen_columns:
-                            seen_columns.add(col_lower)
-                            columns_to_keep.append(col)
-                        else:
-                            columns_to_drop.append(col)
-                
-                # Drop duplicate columns
-                if columns_to_drop:
-                    student_display_df = student_display_df.drop(columns=columns_to_drop)
-                
-                st.dataframe(student_display_df, use_container_width=True)
-            
-            else:
-                st.error("No data found for the selected student.")
+
+# ---- Dropouts Tab ----
+with tab4:
+    st.markdown("### 🚪 Dropouts Tracking")
+    dropout_file = "dropouts.csv"
+    dropouts_df = None
+    if os.path.exists(dropout_file):
+        try:
+            dropouts_df = pd.read_csv(dropout_file)
+        except Exception as e:
+            st.error(f"Error reading {dropout_file}: {str(e)}")
+    if dropouts_df is not None and not dropouts_df.empty:
+        st.dataframe(dropouts_df, use_container_width=True)
+        csv_data = dropouts_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Dropouts Data as CSV",
+            data=csv_data,
+            file_name=f"dropouts_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
     else:
-        st.error("Student data not available.")
+        st.info("No dropout data found. Please add a 'dropouts.csv' file with columns: Student, Dropout Date, Reason.")
+        # Show template/example
+        template = pd.DataFrame({
+            "Student": ["John Doe", "Jane Smith"],
+            "Dropout Date": ["2025-03-15", "2025-05-10"],
+            "Reason": ["Financial hardship", "Relocation"]
+        })
+        st.dataframe(template, use_container_width=True)
+        template_csv = template.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Dropouts Template CSV",
+            data=template_csv,
+            file_name="dropouts_template.csv",
+            mime="text/csv"
+        )
 
 with tab3:
     st.markdown("### 📋 Detailed Student Data")
