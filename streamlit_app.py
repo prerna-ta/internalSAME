@@ -723,20 +723,43 @@ with tab2:
                 if not_appeared_subjects:
                     st.info(f"**Subjects not appeared:** {', '.join(not_appeared_subjects)}")
                 # Progress Over Time trend line graph
+# ...existing code...
+                # Progress Over Time trend line graph
                 if "Period" in student_data.columns:
                     time_data = student_data.copy()
                     time_data = time_data.dropna(subset=["Period", "M%"])
                     if not time_data.empty:
+                        # Convert Period to float for sorting (e.g., '2024.1' -> 2024.1)
+                        def period_to_float(period_str):
+                            try:
+                                return float(str(period_str).replace(" ", ""))
+                            except:
+                                return None
+                        time_data["Period_float"] = time_data["Period"].apply(period_to_float)
+                        # Drop rows where conversion failed
+                        time_data = time_data.dropna(subset=["Period_float"])
+                        # Sort by Period_float
+                        time_data = time_data.sort_values("Period_float")
                         fig_trend = px.line(
                             time_data,
-                            x="Period",
+                            x="Period_float",
                             y="M%",
                             title=f"Progress Over Time for {selected_student}",
                             markers=True
                         )
+                        # Set x-ticks to original Period labels
+                        fig_trend.update_layout(
+                            xaxis_title="Period",
+                            yaxis_title="Overall Percentage (%)",
+                            xaxis = dict(
+                                tickmode='array',
+                                tickvals=time_data["Period_float"],
+                                ticktext=time_data["Period"]
+                            )
+                        )
                         fig_trend.update_traces(line_color="#1f77b4", marker=dict(size=8))
-                        fig_trend.update_layout(xaxis_title="Period", yaxis_title="Overall Percentage (%)")
                         st.plotly_chart(fig_trend, use_container_width=True)
+# ...existing code...
 
                 # Detailed Records section
                 st.markdown("#### Detailed Records")
