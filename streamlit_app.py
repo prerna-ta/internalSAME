@@ -723,43 +723,151 @@ with tab2:
                 if not_appeared_subjects:
                     st.info(f"**Subjects not appeared:** {', '.join(not_appeared_subjects)}")
                 # Progress Over Time trend line graph
-# ...existing code...
-                # Progress Over Time trend line graph
-                if "Period" in student_data.columns:
-                    time_data = student_data.copy()
-                    time_data = time_data.dropna(subset=["Period", "M%"])
-                    if not time_data.empty:
-                        # Convert Period to float for sorting (e.g., '2024.1' -> 2024.1)
-                        def period_to_float(period_str):
-                            try:
-                                return float(str(period_str).replace(" ", ""))
-                            except:
-                                return None
-                        time_data["Period_float"] = time_data["Period"].apply(period_to_float)
-                        # Drop rows where conversion failed
-                        time_data = time_data.dropna(subset=["Period_float"])
-                        # Sort by Period_float
-                        time_data = time_data.sort_values("Period_float")
-                        fig_trend = px.line(
-                            time_data,
-                            x="Period_float",
-                            y="M%",
-                            title=f"Progress Over Time for {selected_student}",
-                            markers=True
-                        )
-                        # Set x-ticks to original Period labels
-                        fig_trend.update_layout(
-                            xaxis_title="Period",
-                            yaxis_title="Overall Percentage (%)",
-                            xaxis = dict(
-                                tickmode='array',
-                                tickvals=time_data["Period_float"],
-                                ticktext=time_data["Period"]
-                            )
-                        )
-                        fig_trend.update_traces(line_color="#1f77b4", marker=dict(size=8))
-                        st.plotly_chart(fig_trend, use_container_width=True)
-# ...existing code...
+                # Student progress over time (if multiple periods available)
+                st.markdown("#### 📈 Progress Over Time")
+                student_all_periods = df_main[df_main["Student"] == selected_student]
+                
+                if "Period" in student_all_periods.columns:
+                    unique_periods = student_all_periods["Period"].dropna().unique()
+                    
+                    # Convert periods to numeric for proper sorting (e.g., "2.1" -> 2.1)
+                    def period_to_float(period_str):
+                        try:
+                            return float(str(period_str).strip())
+                        except:
+                            return 0.0
+                    
+                    # Sort periods numerically
+                    sorted_periods = sorted(unique_periods, key=period_to_float)
+                    
+                    if len(unique_periods) > 1:
+                        # Create progress data for different metrics
+                        progress_data = []
+                        
+                        for period in sorted_periods:
+                            period_data = student_all_periods[student_all_periods["Period"] == period]
+                            if not period_data.empty:
+                                # Get the most recent record for this period (in case of duplicates)
+                                latest_record = period_data.iloc[-1]
+                                
+                                row_data = {"Period": str(period)}
+                                
+                                # Add M% if available and valid
+                                if "M%" in period_data.columns and pd.notna(latest_record["M%"]):
+                                    try:
+                                        m_percent = float(latest_record["M%"])
+                                        if m_percent > 0 and m_percent <= 100:  # Valid percentage range
+                                            row_data["Overall %"] = m_percent
+                                    except:
+                                        pass
+                                
+                                # Add individual subject scores for all available subjects
+                                for subject in subject_columns:
+                                    if subject in period_data.columns and pd.notna(latest_record[subject]):
+                                        try:
+                                            score_val = str(latest_record[subject]).strip()
+                                            if score_val != "Not Appeared" and score_val != "":
+                                                score = float(score_val)
+                                                if score > 0 and score <= 100:  # Valid score range
+                                                    row_data[subject] = score
+                                        except:
+                                            pass
+                                
+                                # Only add if we have at least one valid metric
+                                if len(row_data) > 1:
+                                    progress_data.append(row_data)
+                        
+                        if len(progress_data) > 1:
+                            progress_df = pd.DataFrame(progress_data)
+                            
+                            # Plot overall percentage trend if available
+                            if "Overall %" in progress_df.columns and progress_df["Overall %"].notna().sum() > 1:
+                                # Filter out any NaN values
+                                overall_df = progress_df.dropna(subset=["Overall %"])
+                                if len(overall_df) > 1:
+                                    fig_overall = px.line(
+                                        overall_df,
+                                        x="Period",
+                                        y="Overall %",
+                                        title=f"Overall Performance Trend for {selected_student}",
+                                        markers=True,
+                                        line_shape="linear"
+                                    )
+                                    fig_overall.update_layout(
+                                        xaxis_title="Period",
+                                        yaxis_title="Overall Percentage (%)",
+                                        xaxis=dict(type='category'),  # Treat x-axis as categorical to show actual period values
+                                        showlegend=True
+                                    )
+                                    st.plotly_chart(fig_overall, use_container_width=True)
+                                    
+                                    # Show progress summary with valid data
+                                    first_score = overall_df["Overall %"].iloc[0]
+                                    last_score = overall_df["Overall %"].iloc[-1]
+                                    change = last_score - first_score
+                                    
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("First Period", f"{first_score:.1f}%")
+                                    with col2:
+                                        st.metric("Latest Period", f"{last_score:.1f}%")
+                                    with col3:
+                                        st.metric("Change", f"{change:+.1f}%", delta=f"{change:+.1f}%")
+                                else:
+                                    st.info("Overall percentage data available but insufficient valid data points for trend.")
+                            else:
+                                st.info("Overall percentage data not available or insufficient for trend analysis.")
+                            
+                            # Plot subject-wise trends if available
+                            subject_cols = [col for col in progress_df.columns if col not in ["Period", "Overall %"]]
+                            if subject_cols:
+                                # Create a melted dataframe, but handle NaN values properly
+                                melted_data = []
+                                for _, row in progress_df.iterrows():
+                                    for subject in subject_cols:
+                                        if pd.notna(row[subject]):
+                                            melted_data.append({
+                                                "Period": row["Period"],
+                                                "Subject": subject,
+                                                "Score": row[subject]
+                                            })
+                                
+                                if melted_data:
+                                    melted_df = pd.DataFrame(melted_data)
+                                    
+                                    # Only plot subjects that have at least 2 data points
+                                    subject_counts = melted_df.groupby("Subject").size()
+                                    valid_subjects = subject_counts[subject_counts >= 2].index.tolist()
+                                    
+                                    if valid_subjects:
+                                        filtered_melted = melted_df[melted_df["Subject"].isin(valid_subjects)]
+                                        
+                                        fig_subjects = px.line(
+                                            filtered_melted,
+                                            x="Period",
+                                            y="Score",
+                                            color="Subject",
+                                            title=f"Subject-wise Performance Trend for {selected_student}",
+                                            markers=True
+                                        )
+                                        fig_subjects.update_layout(
+                                            xaxis_title="Period",
+                                            yaxis_title="Score (%)",
+                                            xaxis=dict(type='category'),  # Treat x-axis as categorical to show actual period values
+                                            showlegend=True
+                                        )
+                                        st.plotly_chart(fig_subjects, use_container_width=True)
+                                    else:
+                                        st.info("Insufficient subject data points for trend analysis.")
+                                else:
+                                    st.info("No valid subject scores found for trend analysis.")
+                        else:
+                            st.info("Not enough valid data points to show progress trend.")
+                    else:
+                        st.info("Only one period of data available for this student.")
+                else:
+                    st.info("Period information not available in the data.")
+                
 
                 # Detailed Records section
                 st.markdown("#### Detailed Records")
