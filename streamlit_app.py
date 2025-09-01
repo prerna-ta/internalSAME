@@ -723,7 +723,7 @@ with tab2:
                 if not_appeared_subjects:
                     st.info(f"**Subjects not appeared:** {', '.join(not_appeared_subjects)}")
                 # Progress Over Time trend line graph
-                # Student progress over time (if multiple periods available)
+                                # Student progress over time (if multiple periods available)
                 st.markdown("#### 📈 Progress Over Time")
                 student_all_periods = df_main[df_main["Student"] == selected_student]
                 
@@ -868,7 +868,6 @@ with tab2:
                 else:
                     st.info("Period information not available in the data.")
                 
-
                 # Detailed Records section
                 st.markdown("#### Detailed Records")
 
