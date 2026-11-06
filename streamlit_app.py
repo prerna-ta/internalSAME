@@ -373,8 +373,28 @@ if show_login_page():
             else:
                 st.warning(f"Unable to load Tertiary data from drive. Please check the configurations.")
 
+            # ==========================================
+            # ---- Load student_contact_information -----
+            # ==========================================
+
+            # Ensure this matches the name of your raw unparsed file
+            student_contact_file_id = file_ids.get("student_contact_information", "")
+
+            student_contact_df = None
+            if student_contact_file_id:
+                try:
+                    student_contact_excel = load_excel_from_drive(service, student_contact_file_id, "Student Contact Information")
+                    if student_contact_excel:
+                        sheet_name = list(student_contact_excel.keys())[0]
+                        student_contact_df = student_contact_excel[sheet_name]
+
+                except Exception as e:
+                    st.error(f"Error loading Student Contact Information Excel file: {str(e)}")
+            else:
+                st.warning(f"Unable to load Student Contact Information data from drive. Please check the configurations.")
+
             # Return all main dataframes
-            return df_main, high_school_unique_students, dropout_df, tertiary_df
+            return df_main, high_school_unique_students, dropout_df, tertiary_df, student_contact_df
 
         except Exception as e:
             st.error(f"Error loading data: {str(e)}")
@@ -393,7 +413,7 @@ if show_login_page():
 
     # Load data and logo
     with st.spinner("Loading data from Google Drive..."):
-        df_main, high_school_unique_students, dropout_df, tertiary_df = load_data()
+        df_main, high_school_unique_students, dropout_df, tertiary_df, student_contact_df = load_data()
 
     # Load logo from local file
     logo_base64 = get_logo_base64()
@@ -1395,132 +1415,125 @@ if show_login_page():
     # --- Tab 6 ---
     with tab6:
         st.markdown("### 📇 Student Contact Information")
-        contact_info_path = os.path.join(os.path.dirname(__file__), "Contact Information.csv")
 
-        if not os.path.isfile(contact_info_path):
-            st.warning("Contact information file not found. Add `Contact Information.csv` next to the dashboard app.")
-        else:
-            try:
-                contact_df = pd.read_csv(contact_info_path)
-            except (OSError, UnicodeError, pd.errors.ParserError) as error:
-                st.error(f"Could not read the contact information file: {error}")
+        if student_contact_df is not None and not student_contact_df.empty:
+            contact_df = student_contact_df.copy()
+            contact_df.columns = contact_df.columns.astype(str).str.strip()
+            if "Name" not in contact_df.columns:
+                st.error("The contact information file must include a `Name` column.")
             else:
-                contact_df.columns = contact_df.columns.astype(str).str.strip()
-                if "Name" not in contact_df.columns:
-                    st.error("The contact information file must include a `Name` column.")
+                contact_df = contact_df.dropna(how="all").copy()
+                contact_df["Name"] = contact_df["Name"].astype("string").str.strip()
+                contact_df = contact_df[
+                    contact_df["Name"].notna() & contact_df["Name"].ne("")
+                ]
+
+                if "Timestamp" in contact_df.columns:
+                    contact_df["_submitted_at"] = pd.to_datetime(
+                        contact_df["Timestamp"], errors="coerce"
+                    )
+                    contact_df = contact_df.sort_values(
+                        "_submitted_at", ascending=False, na_position="last"
+                    )
+                    contact_df = contact_df.drop_duplicates(
+                        subset="Name", keep="first"
+                    ).drop(columns="_submitted_at")
                 else:
-                    contact_df = contact_df.dropna(how="all").copy()
-                    contact_df["Name"] = contact_df["Name"].astype("string").str.strip()
-                    contact_df = contact_df[
-                        contact_df["Name"].notna() & contact_df["Name"].ne("")
+                    contact_df = contact_df.drop_duplicates(
+                        subset="Name", keep="last"
+                    )
+
+                contact_df = contact_df.rename(
+                    columns={"Name": "Student", "Timestamp": "Last updated on"}
+                )
+                st.metric("Students with contact records", len(contact_df))
+                st.caption(
+                    "Only the latest submission is shown when a student has multiple entries."
+                )
+
+                selected_contact_student = st.selectbox(
+                    "Select a student",
+                    options=["All students"] + sorted(
+                        contact_df["Student"].astype(str).unique().tolist()
+                    ),
+                    key="contact_information_student",
+                )
+                search_term = st.text_input(
+                    "Search by student, email, phone, or school",
+                    key="contact_information_search",
+                ).strip()
+                display_contacts = contact_df
+                if selected_contact_student != "All students":
+                    display_contacts = display_contacts[
+                        display_contacts["Student"] == selected_contact_student
                     ]
+                if search_term:
+                    searchable_columns = [
+                        column
+                        for column in ["Student", "Email", "Phone number", "School"]
+                        if column in contact_df.columns
+                    ]
+                    matches = display_contacts[searchable_columns].astype("string").apply(
+                        lambda column: column.str.contains(
+                            search_term, case=False, na=False
+                        )
+                    ).any(axis=1)
+                    display_contacts = display_contacts[matches]
 
-                    if "Timestamp" in contact_df.columns:
-                        contact_df["_submitted_at"] = pd.to_datetime(
-                            contact_df["Timestamp"], errors="coerce"
-                        )
-                        contact_df = contact_df.sort_values(
-                            "_submitted_at", ascending=False, na_position="last"
-                        )
-                        contact_df = contact_df.drop_duplicates(
-                            subset="Name", keep="first"
-                        ).drop(columns="_submitted_at")
-                    else:
-                        contact_df = contact_df.drop_duplicates(
-                            subset="Name", keep="last"
-                        )
+                if display_contacts.empty:
+                    st.info("No contact records match the selected filters.")
+                elif selected_contact_student != "All students":
+                    student_contact = display_contacts.iloc[0]
+                    st.subheader(f"👤 {selected_contact_student}")
 
-                    contact_df = contact_df.rename(
-                        columns={"Name": "Student", "Timestamp": "Last updated on"}
+                    field_icons = {
+                        "student": "👤",
+                        "name": "👤",
+                        "last updated on": "🕒",
+                        "email": "✉️",
+                        "school": "🏫",
+                        "course": "🎓",
+                        "expected graduation (e.g. december/july)": "📅",
+                        "phone number": "📞",
+                        "linkedin profile": "🔗",
+                        "updated academic planner link": "🗓️",
+                        "cv link on google drive": "📄",
+                        "e-portfolio link": "🗂️",
+                    }
+                    link_fields = {
+                        "linkedin profile",
+                        "updated academic planner link",
+                        "cv link on google drive",
+                        "e-portfolio link",
+                    }
+
+                    for start in range(0, len(display_contacts.columns), 3):
+                        field_columns = st.columns(3)
+                        for offset, field in enumerate(
+                            display_contacts.columns[start:start + 3]
+                        ):
+                            with field_columns[offset]:
+                                with st.container(border=True):
+                                    field_name = str(field).strip()
+                                    normalized_field = field_name.casefold()
+                                    icon = field_icons.get(normalized_field, "📌")
+                                    st.markdown(f"**{icon} {field_name}**")
+
+                                    value = student_contact[field]
+                                    if pd.isna(value) or not str(value).strip():
+                                        st.caption("Not provided")
+                                    elif (
+                                        normalized_field in link_fields
+                                        and str(value).strip().lower().startswith(
+                                            ("https://", "http://")
+                                        )
+                                    ):
+                                        st.link_button("Open link", str(value).strip())
+                                    else:
+                                        st.write(str(value).strip())
+                else:
+                    st.dataframe(
+                        display_contacts,
+                        use_container_width=True,
+                        hide_index=True,
                     )
-                    st.metric("Students with contact records", len(contact_df))
-                    st.caption(
-                        "Only the latest submission is shown when a student has multiple entries."
-                    )
-
-                    selected_contact_student = st.selectbox(
-                        "Select a student",
-                        options=["All students"] + sorted(
-                            contact_df["Student"].astype(str).unique().tolist()
-                        ),
-                        key="contact_information_student",
-                    )
-                    search_term = st.text_input(
-                        "Search by student, email, phone, or school",
-                        key="contact_information_search",
-                    ).strip()
-                    display_contacts = contact_df
-                    if selected_contact_student != "All students":
-                        display_contacts = display_contacts[
-                            display_contacts["Student"] == selected_contact_student
-                        ]
-                    if search_term:
-                        searchable_columns = [
-                            column
-                            for column in ["Student", "Email", "Phone number", "School"]
-                            if column in contact_df.columns
-                        ]
-                        matches = display_contacts[searchable_columns].astype("string").apply(
-                            lambda column: column.str.contains(
-                                search_term, case=False, na=False
-                            )
-                        ).any(axis=1)
-                        display_contacts = display_contacts[matches]
-
-                    if display_contacts.empty:
-                        st.info("No contact records match the selected filters.")
-                    elif selected_contact_student != "All students":
-                        student_contact = display_contacts.iloc[0]
-                        st.subheader(f"👤 {selected_contact_student}")
-
-                        field_icons = {
-                            "student": "👤",
-                            "name": "👤",
-                            "last updated on": "🕒",
-                            "email": "✉️",
-                            "school": "🏫",
-                            "course": "🎓",
-                            "expected graduation (e.g. december/july)": "📅",
-                            "phone number": "📞",
-                            "linkedin profile": "🔗",
-                            "updated academic planner link": "🗓️",
-                            "cv link on google drive": "📄",
-                            "e-portfolio link": "🗂️",
-                        }
-                        link_fields = {
-                            "linkedin profile",
-                            "updated academic planner link",
-                            "cv link on google drive",
-                            "e-portfolio link",
-                        }
-
-                        for start in range(0, len(display_contacts.columns), 3):
-                            field_columns = st.columns(3)
-                            for offset, field in enumerate(
-                                display_contacts.columns[start:start + 3]
-                            ):
-                                with field_columns[offset]:
-                                    with st.container(border=True):
-                                        field_name = str(field).strip()
-                                        normalized_field = field_name.casefold()
-                                        icon = field_icons.get(normalized_field, "📌")
-                                        st.markdown(f"**{icon} {field_name}**")
-
-                                        value = student_contact[field]
-                                        if pd.isna(value) or not str(value).strip():
-                                            st.caption("Not provided")
-                                        elif (
-                                            normalized_field in link_fields
-                                            and str(value).strip().lower().startswith(
-                                                ("https://", "http://")
-                                            )
-                                        ):
-                                            st.link_button("Open link", str(value).strip())
-                                        else:
-                                            st.write(str(value).strip())
-                    else:
-                        st.dataframe(
-                            display_contacts,
-                            use_container_width=True,
-                            hide_index=True,
-                        )
