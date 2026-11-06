@@ -7,6 +7,8 @@ import numpy as np
 import base64
 import os
 import io
+import re
+from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -1425,6 +1427,69 @@ if show_login_page():
     with tab6:
         st.markdown("### 📇 Student Contact Information")
 
+        def determine_graduation_status(value):
+            invalid_result = {
+                "status": "Please correct the graduation date format",
+                "icon": "⚠️",
+                "color": "#b45309",
+                "bg_color": "#fff7ed",
+                "formatted": "Not provided",
+            }
+
+            if pd.isna(value) or str(value).strip() == "":
+                return invalid_result
+
+            raw_value = str(value).strip()
+            cleaned = re.sub(r"\s+", " ", raw_value).strip()
+            cleaned = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", cleaned, flags=re.IGNORECASE)
+
+            if re.search(r"(?:or|/)", cleaned, flags=re.IGNORECASE):
+                return invalid_result
+
+            month_names = [
+                "january", "february", "march", "april", "may", "june",
+                "july", "august", "september", "october", "november", "december"
+            ]
+            if not re.search(r"\d{4}", cleaned, flags=re.IGNORECASE):
+                return invalid_result
+
+            if not any(month in cleaned.lower() for month in month_names):
+                return invalid_result
+
+            formats = [
+                "%B %Y", "%b %Y", "%d %B %Y", "%d %b %Y",
+                "%B, %Y", "%b, %Y", "%d %B, %Y", "%d %b, %Y"
+            ]
+
+            parsed_date = None
+            for fmt in formats:
+                try:
+                    parsed_date = datetime.strptime(cleaned, fmt)
+                    break
+                except ValueError:
+                    continue
+
+            if parsed_date is None:
+                return invalid_result
+
+            formatted = parsed_date.strftime("%B %Y")
+            if parsed_date.date() <= datetime.now().date():
+                return {
+                    "status": "Graduated",
+                    "icon": "✅",
+                    "color": "#166534",
+                    "bg_color": "#dcfce7",
+                    "formatted": formatted,
+                }
+
+            return {
+                "status": "Not graduated yet",
+                "icon": "🎓",
+                "color": "#1d4ed8",
+                "bg_color": "#dbeafe",
+                "formatted": formatted,
+            }
+
         if student_contact_df is not None and not student_contact_df.empty:
             contact_df = student_contact_df.copy()
             contact_df.columns = contact_df.columns.astype(str).str.strip()
@@ -1493,7 +1558,40 @@ if show_login_page():
                     st.info("No contact records match the selected filters.")
                 elif selected_contact_student != "All students":
                     student_contact = display_contacts.iloc[0]
+                    expected_grad_field = next(
+                        (
+                            col for col in display_contacts.columns
+                            if "expected graduation" in str(col).lower()
+                            or "graduation" in str(col).lower()
+                        ),
+                        None,
+                    )
+                    graduation_info = determine_graduation_status(
+                        student_contact[expected_grad_field] if expected_grad_field else None
+                    )
+
                     st.subheader(f"👤 {selected_contact_student}")
+                    st.markdown(
+                        f"""
+                        <div style="background-color:{graduation_info['bg_color']}; border: 1px solid rgba(15, 23, 42, 0.08); border-left: 6px solid {graduation_info['color']}; border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <div>
+                                    <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #475569; font-weight: 700;">Graduation status</div>
+                                    <div style="font-size: 1.15rem; font-weight: 700; color: {graduation_info['color']}; margin-top: 4px;">{graduation_info['icon']} {graduation_info['status']}</div>
+                                </div>
+                                <div style="padding: 8px 12px; background-color: {graduation_info['color']}; color: white; border-radius: 999px; font-size: 0.9rem; font-weight: 700;">
+                                    {graduation_info['formatted']}
+                                </div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    if graduation_info["status"] == "Please correct the graduation date format":
+                        st.caption(
+                            "Expected graduation date is incomplete or not in a standard month-year format. Please update it to a format like 'December 2026' or '21 August 2026'."
+                        )
 
                     field_icons = {
                         "student": "👤",
@@ -1503,6 +1601,8 @@ if show_login_page():
                         "school": "🏫",
                         "course": "🎓",
                         "expected graduation (e.g. december/july)": "📅",
+                        "expected graduation": "📅",
+                        "graduation": "📅",
                         "phone number": "📞",
                         "linkedin profile": "🔗",
                         "updated academic planner link": "🗓️",
