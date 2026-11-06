@@ -9,11 +9,6 @@ venv/
 .DS_Store
 *.xlsx
 *.png
-test1_old.py
-debug_data.py
-check_kathy.py
-
-
-# Streamlit
-.streamlit/secrets.toml
-Contact Information.csv
+*.csv
+.streamlit/
+.devcontainer/
