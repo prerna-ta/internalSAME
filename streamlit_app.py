@@ -58,6 +58,18 @@ if show_login_page():
         return None
 
     @st.cache_data(ttl=3600)  # Cache for 1 hour
+    def load_google_sheet_from_drive(_service, file_id, file_name):
+        """Load Google Sheets file from Google Drive into pandas DataFrame"""
+        request = _service.files().export_media(
+            fileId=file_id,
+            mimeType="text/csv"
+        )
+        file_content = request.execute()
+        if file_content:
+            return pd.read_csv(io.BytesIO(file_content))
+        return None
+
+    @st.cache_data(ttl=3600)  # Cache for 1 hour
     def load_image_from_drive(_service, file_id, file_name):
         """Load image file from Google Drive and convert to base64"""
         file_content = download_file_from_drive(_service, file_id, file_name)
@@ -383,10 +395,7 @@ if show_login_page():
             student_contact_df = None
             if student_contact_file_id:
                 try:
-                    student_contact_excel = load_excel_from_drive(service, student_contact_file_id, "Student Contact Information")
-                    if student_contact_excel:
-                        sheet_name = list(student_contact_excel.keys())[0]
-                        student_contact_df = student_contact_excel[sheet_name]
+                    student_contact_df = load_google_sheet_from_drive(service, student_contact_file_id,"Student Contact Information")
 
                 except Exception as e:
                     st.error(f"Error loading Student Contact Information Excel file: {str(e)}")
